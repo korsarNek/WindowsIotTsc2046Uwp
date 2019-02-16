@@ -8,6 +8,7 @@ using TouchPanels.Devices;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Windows.UI;
+using Windows.UI.Input.Preview.Injection;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Automation.Peers;
 using Windows.UI.Xaml.Automation.Provider;
@@ -31,6 +32,7 @@ namespace WindowsIoT.TouchSample
         private Tsc2046 tsc2046;
         private TouchPanels.TouchProcessor processor;
         private Point lastPosition = new Point(double.NaN, double.NaN);
+        private InputInjector _inputInjector;
         public MainPage()
         {
             this.InitializeComponent();
@@ -50,6 +52,10 @@ namespace WindowsIoT.TouchSample
                 processor.PointerDown -= Processor_PointerDown;
                 processor.PointerMoved -= Processor_PointerMoved;
                 processor.PointerUp -= Processor_PointerUp;
+            }
+            if (_inputInjector != null)
+            {
+                _inputInjector.UninitializeTouchInjection();
             }
             base.OnNavigatingFrom(e);
         }
@@ -72,45 +78,70 @@ namespace WindowsIoT.TouchSample
                 throw;
             }
             //Load up the touch processor and listen for touch events
+            _inputInjector = InputInjector.TryCreate();
+            if (_inputInjector == null)
+                throw new InvalidOperationException("Unable to create InputInjector.");
+
+            _inputInjector.InitializeTouchInjection(InjectedInputVisualizationMode.Default);
             processor = new TouchPanels.TouchProcessor(tsc2046);
             processor.PointerDown += Processor_PointerDown;
             processor.PointerMoved += Processor_PointerMoved;
             processor.PointerUp += Processor_PointerUp;
         }
 
-        IScrollProvider currentScrollItem;
-        
         private void Processor_PointerDown(object sender, TouchPanels.PointerEventArgs e)
         {
             WriteStatus(e, "Down");
-            currentScrollItem = FindElementsToInvoke(e.Position);
-            lastPosition = e.Position;
+            var downInfos = new InjectedInputTouchInfo
+            {
+                PointerInfo = new InjectedInputPointerInfo
+                {
+                    PointerOptions =
+                        InjectedInputPointerOptions.PointerDown |
+                        InjectedInputPointerOptions.InContact,
+                    PixelLocation = new InjectedInputPoint
+                    {
+                        PositionX = (int)e.Position.X,
+                        PositionY = (int)e.Position.Y
+                    }
+                }
+            };
+
+            // Inject the touch input. 
+            _inputInjector.InjectTouchInput(new[] { downInfos });
         }
         private void Processor_PointerMoved(object sender, TouchPanels.PointerEventArgs e)
         {
             WriteStatus(e, "Moved");
-            if(currentScrollItem != null)
+            var moveInfo = new InjectedInputTouchInfo
             {
-                double dx = e.Position.X - lastPosition.X;
-                double dy = e.Position.Y - lastPosition.Y;
-                if (!currentScrollItem.HorizontallyScrollable) dx = 0;
-                if (!currentScrollItem.VerticallyScrollable) dy = 0;
-
-                Windows.UI.Xaml.Automation.ScrollAmount h = Windows.UI.Xaml.Automation.ScrollAmount.NoAmount;
-                Windows.UI.Xaml.Automation.ScrollAmount v = Windows.UI.Xaml.Automation.ScrollAmount.NoAmount;
-                if (dx < 0) h = Windows.UI.Xaml.Automation.ScrollAmount.SmallIncrement;
-                else if (dx > 0) h = Windows.UI.Xaml.Automation.ScrollAmount.SmallDecrement;
-                if (dy < 0) v = Windows.UI.Xaml.Automation.ScrollAmount.SmallIncrement;
-                else if (dy > 0) v = Windows.UI.Xaml.Automation.ScrollAmount.SmallDecrement;
-                currentScrollItem.Scroll(h, v);
-            }
-            lastPosition = e.Position;
+                PointerInfo = new InjectedInputPointerInfo
+                {
+                    PointerOptions =
+                        InjectedInputPointerOptions.Update |
+                        InjectedInputPointerOptions.InContact,
+                    PixelLocation = new InjectedInputPoint
+                    {
+                        PositionX = (int)e.Position.X,
+                        PositionY = (int)e.Position.Y
+                    }
+                }
+            };
+            _inputInjector.InjectTouchInput(new[] { moveInfo });
         }
         private void Processor_PointerUp(object sender, TouchPanels.PointerEventArgs e)
         {
             WriteStatus(e, "Up");
-            currentScrollItem = null;
+            var upInfo = new InjectedInputTouchInfo
+            {
+                PointerInfo = new InjectedInputPointerInfo
+                {
+                    PointerOptions = InjectedInputPointerOptions.PointerUp
+                }
+            };
+            _inputInjector.InjectTouchInput(new[] { upInfo });
         }
+
         private void WriteStatus(TouchPanels.PointerEventArgs args, string type)
         {
             Status.Text = $"{type}\nPosition: {args.Position.X},{args.Position.Y}\nPressure:{args.Pressure}";
@@ -121,12 +152,9 @@ namespace WindowsIoT.TouchSample
             await CalibrateTouch();
         }
 
-        private bool _isCalibrating = false; //flag used to ignore the touch processor while calibrating
         private async Task CalibrateTouch()
         {
-            _isCalibrating = true;
             var calibration = await TouchPanels.UI.LcdCalibrationView.CalibrateScreenAsync(tsc2046);
-            _isCalibrating = false;
             tsc2046.SetCalibration(calibration.A, calibration.B, calibration.C, calibration.D, calibration.E, calibration.F);
             try
             {
@@ -150,50 +178,5 @@ namespace WindowsIoT.TouchSample
         {
             LayoutRoot.Background = new SolidColorBrush(Colors.Blue);
         }
-
-        private IScrollProvider FindElementsToInvoke(Point screenPosition)
-        {
-            if (_isCalibrating) return null;
-            
-            var elements = VisualTreeHelper.FindElementsInHostCoordinates(new Windows.Foundation.Point(screenPosition.X, screenPosition.Y), this, false);
-            //Search for buttons in the visual tree that we can invoke
-            //If we can find an element button that implements the 'Invoke' automation pattern (usually buttons), we'll invoke it
-            foreach (var e in elements.OfType<FrameworkElement>())
-            {
-                var element = e;
-                AutomationPeer peer = null;
-                object pattern = null;
-                while (true)
-                {
-                    peer = FrameworkElementAutomationPeer.FromElement(element);
-                    if (peer != null)
-                    {
-                        pattern = peer.GetPattern(PatternInterface.Invoke);
-                        if (pattern != null)
-                        {
-                            break;
-                        }
-                        pattern = peer.GetPattern(PatternInterface.Scroll);
-                        if (pattern != null)
-                        {
-                            break;
-                        }
-                    }
-                    var parent = VisualTreeHelper.GetParent(element);
-                    if (parent is FrameworkElement)
-                        element = parent as FrameworkElement;
-                    else
-                        break;
-                }
-                if (pattern != null)
-                {
-                    var p = pattern as Windows.UI.Xaml.Automation.Provider.IInvokeProvider;
-                    p?.Invoke();
-                    return pattern as IScrollProvider;
-                }
-            }
-            return null;
-        }
-       
     }
 }
