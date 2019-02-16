@@ -24,9 +24,7 @@ namespace TouchPanels
 
 		public TouchProcessor(ITouchDevice device)
 		{
-            if (device == null)
-                throw new ArgumentNullException(nameof(device));
-			this.device = device;
+            this.device = device ?? throw new ArgumentNullException(nameof(device));
 		}
 
 		private bool HasListeners
