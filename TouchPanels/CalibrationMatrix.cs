@@ -15,7 +15,7 @@ namespace TouchPanels
 	/// </summary>
 	internal class CalibrationMatrix
 	{
-		private object datalock = new object();
+		private readonly object datalock = new object();
 		public Point Transform(Point input)
 		{
 			return new Point(
