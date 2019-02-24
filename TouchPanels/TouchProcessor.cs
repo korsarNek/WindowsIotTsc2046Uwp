@@ -7,83 +7,21 @@ using System.Threading.Tasks;
 using TouchPanels;
 using TouchPanels.Devices;
 using Windows.Foundation;
+using Windows.UI.Input.Preview.Injection;
 using Windows.UI.Xaml;
 
 namespace TouchPanels
 {
-	public sealed class PointerEventArgs : EventArgs
-	{
-		public Point Position { get; internal set; }
-		public int Pressure { get; internal set; }
-	}
-	public sealed class TouchProcessor : DependencyObject
+	public sealed class TouchProcessor
 	{
 		private ITouchDevice device;
         private CancellationTokenSource threadCancelSource = new CancellationTokenSource();
 		private bool penPressed;
+        private InputInjector _inputInjector;
 
-		public TouchProcessor(ITouchDevice device)
+        public TouchProcessor(ITouchDevice device)
 		{
             this.device = device ?? throw new ArgumentNullException(nameof(device));
-		}
-
-		private bool HasListeners
-		{
-			get { return (_PointerMoved != null) && (_PointerDown != null) && (_PointerUp != null); }
-		}
-
-		private event EventHandler<PointerEventArgs> _PointerDown;
-		public event EventHandler<PointerEventArgs> PointerDown
-		{
-			add
-			{
-				if (!HasListeners)
-					StartProcessor();
-				_PointerDown += value;
-
-			}
-			remove
-			{
-				_PointerDown -= value;
-				if (!HasListeners)
-					StopProcessor();
-			}
-		}
-
-		private event EventHandler<PointerEventArgs> _PointerUp;
-		public event EventHandler<PointerEventArgs> PointerUp
-		{
-			add
-			{
-				if (!HasListeners)
-					StartProcessor();
-				_PointerUp += value;
-
-			}
-			remove
-			{
-				_PointerUp -= value;
-				if (!HasListeners)
-					StopProcessor();
-			}
-		}
-
-		private event EventHandler<PointerEventArgs> _PointerMoved;
-        public event EventHandler<PointerEventArgs> PointerMoved
-		{
-			add
-			{
-				if (!HasListeners)
-					StartProcessor();
-				_PointerMoved += value;
-
-			}
-			remove
-			{
-				_PointerMoved -= value;
-				if (!HasListeners)
-					StopProcessor();
-			}
 		}
 
 		private async void TouchProcessorLoop(CancellationToken cancellationToken)
@@ -93,54 +31,111 @@ namespace TouchPanels
 				ReadTouchState();
 				await Task.Delay(10);
 			}
-		}
 
-		private void ReadTouchState()
+            _inputInjector.UninitializeTouchInjection();
+        }
+
+        private void PointerDown(Point position, double pressure)
+        {
+            var downInfos = new InjectedInputTouchInfo
+            {
+                TouchParameters = InjectedInputTouchParameters.Pressure,
+                Pressure = pressure,
+                PointerInfo = new InjectedInputPointerInfo
+                {
+                    PointerOptions = InjectedInputPointerOptions.PointerDown | InjectedInputPointerOptions.InContact,
+                    PixelLocation = new InjectedInputPoint
+                    {
+                        PositionX = (int)position.X,
+                        PositionY = (int)position.Y
+                    }
+                }
+            };
+
+            // Inject the touch input. 
+            _inputInjector.InjectTouchInput(new[] { downInfos });
+        }
+
+        private void PointerMoved(Point position, double pressure)
+        {
+            var moveInfo = new InjectedInputTouchInfo
+            {
+                TouchParameters = InjectedInputTouchParameters.Pressure,
+                Pressure = pressure,
+                PointerInfo = new InjectedInputPointerInfo
+                {
+                    PointerOptions = InjectedInputPointerOptions.Update | InjectedInputPointerOptions.InContact,
+                    PixelLocation = new InjectedInputPoint
+                    {
+                        PositionX = (int)position.X,
+                        PositionY = (int)position.Y
+                    }
+                }
+            };
+            _inputInjector.InjectTouchInput(new[] { moveInfo });
+        }
+
+        private void PointerUp(Point position)
+        {
+            var upInfo = new InjectedInputTouchInfo
+            {
+                PointerInfo = new InjectedInputPointerInfo
+                {
+                    PointerOptions = InjectedInputPointerOptions.PointerUp,
+                    PixelLocation = new InjectedInputPoint()
+                    {
+                        PositionX = (int)position.X,
+                        PositionY = (int)position.Y,
+                    }
+                }
+            };
+            _inputInjector.InjectTouchInput(new[] { upInfo });
+        }
+
+        private void ReadTouchState()
 		{
 			device.ReadTouchpoints();
 
-			int pressure = device.Pressure;
-			if (pressure > 5)
+			var pressure = device.Pressure;
+			if (pressure > 0.1d)
 			{
 				if (!penPressed)
 				{
 					penPressed = true;
-					var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-					{
-						_PointerDown?.Invoke(this, new PointerEventArgs() { Position = device.TouchPosition, Pressure = pressure });
-					});
+                    PointerDown(device.TouchPosition, pressure);
 				}
 				else
 				{
-					var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-					{
-						_PointerMoved?.Invoke(this, new PointerEventArgs() { Position = device.TouchPosition, Pressure = pressure });
-					});
+                    PointerMoved(device.TouchPosition, pressure);
 				}
 			}
 			else if (pressure < 2 && penPressed == true)
 			{
 				penPressed = false;
-				var _ = Dispatcher.RunAsync(Windows.UI.Core.CoreDispatcherPriority.Normal, () =>
-				{
-					_PointerUp?.Invoke(this, new PointerEventArgs() { Position = device.TouchPosition });
-				});
+                PointerUp(device.TouchPosition);
 			}
 		}
 
-		private void StartProcessor()
+		public void Initialize()
 		{
-			threadCancelSource = new CancellationTokenSource();
-			Task.Run(() => TouchProcessorLoop(threadCancelSource.Token));
-		}
+            //Load up the touch processor and listen for touch events
+            _inputInjector = InputInjector.TryCreate();
+            if (_inputInjector == null)
+                throw new InvalidOperationException("Unable to create InputInjector.");
 
-		private void StopProcessor()
+            _inputInjector.InitializeTouchInjection(InjectedInputVisualizationMode.Default);
+
+            threadCancelSource = new CancellationTokenSource();
+            Task.Run(() => TouchProcessorLoop(threadCancelSource.Token));
+        }
+
+		public void Uninitialize()
 		{
 			if(threadCancelSource != null)
 			{
 				threadCancelSource.Cancel();
 				threadCancelSource = null;
             }
-		}
+        }
 	}
 }

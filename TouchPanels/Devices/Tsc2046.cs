@@ -14,8 +14,9 @@ namespace TouchPanels.Devices
     /// </summary>
 	public sealed class Tsc2046 : ITouchDevice
 	{
-		private CalibrationMatrix CalibrationMatrix = new CalibrationMatrix();        //calibrate matrix
-		private const int MIN_PRESSURE = 5;     //minimum pressure 1...254
+		private CalibrationMatrix CalibrationMatrix = new CalibrationMatrix();
+        private const int MAX_PRESSURE = 255;
+        private const int MIN_PRESSURE = 1;
 		private const int CS_PIN = 1;
 
 		private const byte CMD_START = 0x80;
@@ -111,67 +112,22 @@ namespace TouchPanels.Devices
 		/// <summary>
 		/// Touch pressure
 		/// </summary>
-		int ITouchDevice.Pressure { get { return _currentPressure; } } 
+		double ITouchDevice.Pressure { get { return (double)(_currentPressure - MIN_PRESSURE) / (MAX_PRESSURE - MIN_PRESSURE); } } 
 
         void ITouchDevice.ReadTouchpoints()
         {
-            int p, a1, a2, b1, b2;
-            int x, y;
             byte[] writeBuffer24 = new byte[3];
             byte[] readBuffer24 = new byte[3];
-            
-            //get pressure first to see if the screen is being touched
-            writeBuffer24[0] = (byte)(CMD_START | CMD_8BIT | CMD_DIFF | CMD_Z1_POS);
-            touchSPI.TransferFullDuplex(writeBuffer24, readBuffer24);
-            a1 = readBuffer24[1] & 0x7F;
 
-            writeBuffer24[0] = (byte)(CMD_START | CMD_8BIT | CMD_DIFF | CMD_Z2_POS);
-            touchSPI.TransferFullDuplex(writeBuffer24, readBuffer24);
-            b1 = 255 - readBuffer24[1] & 0x7F;
-            p = a1 + b1;
+            var x = ReadXPosition();
+            var y = ReadYPosition();
 
-            if (p > MIN_PRESSURE)
+            if (x > 0 && y > 0)
             {
-                //using 2 samples for x and y position
-                //get X data
-                writeBuffer24[0] = (byte)(CMD_START | CMD_12BIT | CMD_DIFF | CMD_X_POS);
-                touchSPI.TransferFullDuplex(writeBuffer24, readBuffer24);
-                a1 = readBuffer24[1];
-                b1 = readBuffer24[2];
-                writeBuffer24[0] = (byte)(CMD_START | CMD_12BIT | CMD_DIFF | CMD_X_POS);
-                touchSPI.TransferFullDuplex(writeBuffer24, readBuffer24);
-                a2 = readBuffer24[1]; 
-                b2 = readBuffer24[2]; 
-
-                if (a1 == a2)
-                {
-                    x = ((a2 << 4) | (b2 >> 4)); //12bit: ((a<<4)|(b>>4)) //10bit: ((a<<2)|(b>>6))
-
-                    //get Y data
-                    writeBuffer24[0] = (byte)(CMD_START | CMD_12BIT | CMD_DIFF | CMD_Y_POS);
-                    touchSPI.TransferFullDuplex(writeBuffer24, readBuffer24);
-                    a1 = readBuffer24[1];
-                    b1 = readBuffer24[2];
-                    writeBuffer24[0] = (byte)(CMD_START | CMD_12BIT | CMD_DIFF | CMD_Y_POS);
-                    touchSPI.TransferFullDuplex(writeBuffer24, readBuffer24);
-                    a2 = readBuffer24[1];
-                    b2 = readBuffer24[2];
-
-                    if (a1 == a2)
-                    {
-                        y = ((a2 << 4) | (b2 >> 4)); //12bit: ((a<<4)|(b>>4)) //10bit: ((a<<2)|(b>>6))
-                        if ( x >0 && y >0)
-                        {
-                            _lastRawTouchPosition = new Point(x, y);
-                        }
-                        _currentPressure = p;
-                    }
-                }
+                _lastRawTouchPosition = new Point(x, y);
             }
-            else
-            {
-                _currentPressure = 0;
-            }
+            _currentPressure = ReadPressure();
+
 			//Update display location
 			if (!CalibrationMatrix.IsValid)
 			{
@@ -184,6 +140,38 @@ namespace TouchPanels.Devices
 				var tp = CalibrationMatrix.Transform(_lastRawTouchPosition);
                 _lastTouchPosition = new Point(tp.X, tp.Y);
 			}
+
+            int ReadPressure()
+            {
+                writeBuffer24[0] = CMD_START | CMD_8BIT | CMD_DIFF | CMD_Z1_POS;
+                touchSPI.TransferFullDuplex(writeBuffer24, readBuffer24);
+                var a = readBuffer24[1] & 0x7F;
+
+                writeBuffer24[0] = CMD_START | CMD_8BIT | CMD_DIFF | CMD_Z2_POS;
+                touchSPI.TransferFullDuplex(writeBuffer24, readBuffer24);
+                var b = 255 - readBuffer24[1] & 0x7F;
+                return a + b;
+            }
+
+            int ReadXPosition()
+            {
+                writeBuffer24[0] = (byte)(CMD_START | CMD_12BIT | CMD_DIFF | CMD_X_POS);
+                touchSPI.TransferFullDuplex(writeBuffer24, readBuffer24);
+                var a = readBuffer24[1];
+                var b = readBuffer24[2];
+
+                return ((a << 4) | (b >> 4)); //12bit: ((a<<4)|(b>>4)) //10bit: ((a<<2)|(b>>6))
+            }
+
+            int ReadYPosition()
+            {
+                writeBuffer24[0] = (byte)(CMD_START | CMD_12BIT | CMD_DIFF | CMD_Y_POS);
+                touchSPI.TransferFullDuplex(writeBuffer24, readBuffer24);
+                var a = readBuffer24[1];
+                var b = readBuffer24[2];
+
+                return ((a << 4) | (b >> 4)); //12bit: ((a<<4)|(b>>4)) //10bit: ((a<<2)|(b>>6))
+            }
 		}
     }
 }

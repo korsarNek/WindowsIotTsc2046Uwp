@@ -9,7 +9,7 @@ namespace TouchPanels.Devices
 {
     public interface ITouchDevice
     {
-        int Pressure { get; }
+        double Pressure { get; }
         Point TouchPosition { get; }
         void ReadTouchpoints();
         Point RawTouchPosition { get; }

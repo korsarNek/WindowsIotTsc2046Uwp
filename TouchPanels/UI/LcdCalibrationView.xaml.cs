@@ -83,18 +83,19 @@ namespace TouchPanels.UI
 
 		private async Task<Point> GetRawTouchEventAsync()
 		{
-            while (device.Pressure >= 1) //Ensure user has let go
+            //TODO: React to normal input events instead of reading the device directly?
+            while (device.Pressure >= 0.1d) //Ensure user has let go
 			{
 				await Task.Delay(5);
 				device.ReadTouchpoints();
 			}
 			//wait for pen pressure
-			while (device.Pressure < 5) {
+			while (device.Pressure < 0.1d) {
 				await Task.Delay(5);
 				device.ReadTouchpoints();
 			}
 			Point p = device.RawTouchPosition;
-            while (device.Pressure >= 1) //Ensure user has let go again
+            while (device.Pressure >= 0.1d) //Ensure user has let go again
 			{
 				p = device.RawTouchPosition;
 				await Task.Delay(5);

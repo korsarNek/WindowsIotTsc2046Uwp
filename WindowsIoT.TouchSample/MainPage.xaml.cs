@@ -32,7 +32,7 @@ namespace WindowsIoT.TouchSample
         private Tsc2046 tsc2046;
         private TouchPanels.TouchProcessor processor;
         private Point lastPosition = new Point(double.NaN, double.NaN);
-        private InputInjector _inputInjector;
+        
         public MainPage()
         {
             this.InitializeComponent();
@@ -43,108 +43,18 @@ namespace WindowsIoT.TouchSample
             Status.Text = "Init Success";
             base.OnNavigatedTo(e);
         }
-        protected override void OnNavigatingFrom(NavigatingCancelEventArgs e)
-        {
-            if (processor != null)
-            {
-                //Unhooking from all the touch events, will automatically shut down the processor.
-                //Remember to do this, or you view could be staying in memory.
-                processor.PointerDown -= Processor_PointerDown;
-                processor.PointerMoved -= Processor_PointerMoved;
-                processor.PointerUp -= Processor_PointerUp;
-            }
-            if (_inputInjector != null)
-            {
-                _inputInjector.UninitializeTouchInjection();
-            }
-            base.OnNavigatingFrom(e);
-        }
 
         private async void Init()
         {
-            tsc2046 = await TouchPanels.Devices.Tsc2046.GetDefaultAsync();
-            try
-            {
-                await tsc2046.LoadCalibrationAsync(CalibrationFilename);
-            }
-            catch (System.IO.FileNotFoundException)
+            tsc2046 = await Tsc2046.GetDefaultAsync();
+            bool successful = await tsc2046.TryLoadCalibrationAsync(CalibrationFilename);
+            if (!successful)
             {
                 await CalibrateTouch(); //Initiate calibration if we don't have a calibration on file
             }
-            catch(System.UnauthorizedAccessException)
-            {
-                //No access to documents folder
-                await new Windows.UI.Popups.MessageDialog("Make sure the application manifest specifies access to the documents folder and declares the file type association for the calibration file.", "Configuration Error").ShowAsync();
-                throw;
-            }
-            //Load up the touch processor and listen for touch events
-            _inputInjector = InputInjector.TryCreate();
-            if (_inputInjector == null)
-                throw new InvalidOperationException("Unable to create InputInjector.");
 
-            _inputInjector.InitializeTouchInjection(InjectedInputVisualizationMode.Default);
             processor = new TouchPanels.TouchProcessor(tsc2046);
-            processor.PointerDown += Processor_PointerDown;
-            processor.PointerMoved += Processor_PointerMoved;
-            processor.PointerUp += Processor_PointerUp;
-        }
-
-        private void Processor_PointerDown(object sender, TouchPanels.PointerEventArgs e)
-        {
-            WriteStatus(e, "Down");
-            var downInfos = new InjectedInputTouchInfo
-            {
-                PointerInfo = new InjectedInputPointerInfo
-                {
-                    PointerOptions =
-                        InjectedInputPointerOptions.PointerDown |
-                        InjectedInputPointerOptions.InContact,
-                    PixelLocation = new InjectedInputPoint
-                    {
-                        PositionX = (int)e.Position.X,
-                        PositionY = (int)e.Position.Y
-                    }
-                }
-            };
-
-            // Inject the touch input. 
-            _inputInjector.InjectTouchInput(new[] { downInfos });
-        }
-        private void Processor_PointerMoved(object sender, TouchPanels.PointerEventArgs e)
-        {
-            WriteStatus(e, "Moved");
-            var moveInfo = new InjectedInputTouchInfo
-            {
-                PointerInfo = new InjectedInputPointerInfo
-                {
-                    PointerOptions =
-                        InjectedInputPointerOptions.Update |
-                        InjectedInputPointerOptions.InContact,
-                    PixelLocation = new InjectedInputPoint
-                    {
-                        PositionX = (int)e.Position.X,
-                        PositionY = (int)e.Position.Y
-                    }
-                }
-            };
-            _inputInjector.InjectTouchInput(new[] { moveInfo });
-        }
-        private void Processor_PointerUp(object sender, TouchPanels.PointerEventArgs e)
-        {
-            WriteStatus(e, "Up");
-            var upInfo = new InjectedInputTouchInfo
-            {
-                PointerInfo = new InjectedInputPointerInfo
-                {
-                    PointerOptions = InjectedInputPointerOptions.PointerUp
-                }
-            };
-            _inputInjector.InjectTouchInput(new[] { upInfo });
-        }
-
-        private void WriteStatus(TouchPanels.PointerEventArgs args, string type)
-        {
-            Status.Text = $"{type}\nPosition: {args.Position.X},{args.Position.Y}\nPressure:{args.Pressure}";
+            processor.Initialize();
         }
 
         private async void Calibrate_Click(object sender, RoutedEventArgs e)
