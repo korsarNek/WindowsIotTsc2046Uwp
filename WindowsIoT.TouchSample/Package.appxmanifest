@@ -34,12 +34,8 @@
     </Application>
   </Applications>
   <Capabilities>
-    <Capability Name="internetClient" />
-    <uap:Capability Name="removableStorage" />
-    <uap:Capability Name="musicLibrary" />
-    <uap:Capability Name="picturesLibrary" />
-    <uap:Capability Name="videosLibrary" />
     <uap:Capability Name="documentsLibrary" />
     <rescap:Capability Name="inputInjectionBrokered" />
+    <DeviceCapability Name="lowLevel" />
   </Capabilities>
 </Package>
