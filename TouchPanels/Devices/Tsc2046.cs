@@ -51,9 +51,16 @@ namespace TouchPanels.Devices
 			}
 		}
 
-		public Task LoadCalibrationAsync(string fileName)
+		public async Task<bool> TryLoadCalibrationAsync(string fileName)
 		{
-			return CalibrationMatrix.LoadCalDataAsync(fileName);
+			var matrix = await CalibrationMatrix.LoadCalDataAsync(fileName);
+            if (matrix != null)
+            {
+                CalibrationMatrix = matrix;
+                return true;
+            }
+
+            return false;
 		}
 
 		public Task SaveCalibrationAsync(string fileName)
