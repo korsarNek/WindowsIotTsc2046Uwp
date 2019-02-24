@@ -71,11 +71,17 @@ namespace TouchPanels.Devices
 
 		private async Task InitTSC2046SPI()
         {
-            var touchSettings = new SpiConnectionSettings(CS_PIN);
-            touchSettings.ClockFrequency = 125000;
-            touchSettings.Mode = SpiMode.Mode0; //Mode0,1,2,3;  MCP23S17 needs mode 0
+            var touchSettings = new SpiConnectionSettings(CS_PIN)
+            {
+                ClockFrequency = 125000,
+                Mode = SpiMode.Mode0 //Mode0,1,2,3;  MCP23S17 needs mode 0
+            };
             string DispspiAqs = SpiDevice.GetDeviceSelector( "SPI0");
             var DispdeviceInfo = await DeviceInformation.FindAllAsync(DispspiAqs);
+            if (DispdeviceInfo.Count == 0)
+            {
+                throw new PlatformNotSupportedException("No SPI device exists for SPI0.");
+            }
             touchSPI = await SpiDevice.FromIdAsync(DispdeviceInfo[0].Id, touchSettings);
             //set vars
             _lastTouchPosition = new Point(double.NaN, double.NaN);
