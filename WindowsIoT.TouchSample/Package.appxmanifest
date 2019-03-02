@@ -20,17 +20,6 @@
         </uap:DefaultTile>
         <uap:SplashScreen Image="Assets\SplashScreen.png" />
       </uap:VisualElements>
-      <Extensions>
-        <uap:Extension Category="windows.fileTypeAssociation">
-          <uap:FileTypeAssociation Name="tsc2046.cal.data">
-            <uap:DisplayName>Calibration Data for Touch Screen</uap:DisplayName>
-            <uap:EditFlags OpenIsSafe="true" />
-            <uap:SupportedFileTypes>
-              <uap:FileType ContentType="tsc2046.cal.data/.">.cal</uap:FileType>
-            </uap:SupportedFileTypes>
-          </uap:FileTypeAssociation>
-        </uap:Extension>
-      </Extensions>
     </Application>
   </Applications>
   <Capabilities>

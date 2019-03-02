@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using TouchPanels.Devices;
+using TouchPanels;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 using Windows.UI;
@@ -28,8 +28,6 @@ namespace WindowsIoT.TouchSample
     public sealed partial class MainPage : Page
     {
         const string CalibrationFilename = "TSC2046";
-        private Tsc2046 tsc2046;
-        private TouchPanels.TouchProcessor processor;
         private Point lastPosition = new Point(double.NaN, double.NaN);
         
         public MainPage()
@@ -45,15 +43,8 @@ namespace WindowsIoT.TouchSample
 
         private async void Init()
         {
-            tsc2046 = await Tsc2046.GetDefaultAsync();
-            bool successful = await tsc2046.TryLoadCalibrationAsync(CalibrationFilename);
-            if (!successful)
-            {
-                await CalibrateTouch(); //Initiate calibration if we don't have a calibration on file
-            }
-
-            processor = new TouchPanels.TouchProcessor(tsc2046);
-            processor.Initialize();
+            await Manager.StartDevice();
+            await Manager.LoadCalibrationMatrix();
         }
 
         private async void Calibrate_Click(object sender, RoutedEventArgs e)
@@ -63,16 +54,8 @@ namespace WindowsIoT.TouchSample
 
         private async Task CalibrateTouch()
         {
-            var calibration = await TouchPanels.UI.LcdCalibrationView.CalibrateScreenAsync(tsc2046);
-            tsc2046.SetCalibration(calibration.A, calibration.B, calibration.C, calibration.D, calibration.E, calibration.F);
-            try
-            {
-                await tsc2046.SaveCalibrationAsync(CalibrationFilename);
-            }
-            catch (Exception ex)
-            {
-                Status.Text = ex.Message;
-            }
+            await Manager.Calibrate(CalibrationStyle.CornersAndCenter);
+            await Manager.SaveCalibrationMatrix();
         }
 
         private void Red_Click(object sender, RoutedEventArgs e)
