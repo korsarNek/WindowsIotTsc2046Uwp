@@ -94,7 +94,7 @@ namespace TouchPanels
             var secondSampleY = ReadYPosition();
             var secondSamplePressure = ReadPressure();
 
-            // Shift the values to reduce the accuracy of these checks, it has to be just enough to cancel out the noise.
+            // Check the distance between the two samples to cancel out the noise and general inaccuracy.
             // This is necessary on the tested TSC2046.
             // On the Tsc2007 this is probably not necessary because the chip already samples and averages 7 times on a single request.
             // The Tsc2007 removes the 2 highest and 2 lowest values and averages the middle 3 values.

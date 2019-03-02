@@ -23,8 +23,6 @@
     </Application>
   </Applications>
   <Capabilities>
-    <uap:Capability Name="documentsLibrary" />
     <rescap:Capability Name="inputInjectionBrokered" />
-    <DeviceCapability Name="lowLevel" />
   </Capabilities>
 </Package>

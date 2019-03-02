@@ -20,7 +20,17 @@ namespace TouchPanels
             this.device = device ?? throw new ArgumentNullException(nameof(device));
 		}
 
+        /// <summary>
+        /// The minimum pressure until a touch is registered.
+        /// Has to be a value between 0 and 1.
+        /// </summary>
         public double PressedThreshold { get; set; } = 5d / 255;
+        /// <summary>
+        /// The pressure value distance from the threshold to unregister a touch.
+        /// If a touch is registered at 5%, a distance of 3% means the touch is unregistered
+        /// at 2%. Meaning in the range from 2% to 5% would be no change registered.
+        /// Has to be a value between 0 and 1.
+        /// </summary>
         public double PressedThresholdDistance { get; set; } = 3d / 255;
 
         public event Action<PointerEventArgs> PointerDown;
