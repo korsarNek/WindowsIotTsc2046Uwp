@@ -1,6 +1,6 @@
-### UWP Windows 10 IOT Example for handling touch from a Tsc2046 display.
+### UWP Windows 10 IOT Example for handling touch from a Tsc2046 or XPT2046 display.
 
-The TouchPanels project contains all the code for handling input from a TSC2046 display.
+The TouchPanels project contains all the code for handling input from a TSC2046 or XPT2046 display.
 
 It works by polling the display for new input and then triggering touch events via an InputInjector which makes
 the handling of the touch events transparent to the application.
